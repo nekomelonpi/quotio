@@ -359,8 +359,8 @@ struct StatusBarQuotaItemView: View {
                     .foregroundStyle(.orange)
             } else if let quotaPair = item.quotaPair {
                 VStack(alignment: .trailing, spacing: 0) {
-                    compactQuotaText(quotaPair.top.remainingPercentage)
-                    compactQuotaText(quotaPair.bottom.remainingPercentage)
+                    compactQuotaText(quotaPair.top.remainingPercentage, isWeekly: false)
+                    compactQuotaText(quotaPair.bottom.remainingPercentage, isWeekly: true)
                 }
                 .frame(height: 18)
             } else if item.percentage >= 0 {
@@ -380,13 +380,13 @@ struct StatusBarQuotaItemView: View {
         return String(format: "%.0f%%", clamped.rounded())
     }
 
-    private func compactQuotaText(_ remainingValue: Double) -> some View {
+    private func compactQuotaText(_ remainingValue: Double, isWeekly: Bool) -> some View {
         let displayedValue = remainingValue < 0
             ? -1
             : quotaDisplayMode.displayValue(from: remainingValue)
         let quotaColor: Color = remainingValue < 0
             ? .secondary
-            : item.statusColor(for: remainingValue)
+            : item.statusColor(for: remainingValue, isWeekly: isWeekly)
 
         return Text(formatPercentage(displayedValue))
             .font(.system(size: 8.5, weight: .semibold, design: .monospaced))

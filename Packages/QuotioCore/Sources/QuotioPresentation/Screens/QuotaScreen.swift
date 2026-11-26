@@ -238,20 +238,8 @@ struct QuotaScreen: View {
 fileprivate struct QuotaDisplayHelper {
     let displayMode: QuotaDisplayMode
     
-    func statusColor(remainingPercent: Double) -> Color {
-        let clamped = max(0, min(100, remainingPercent))
-        let usedPercent = 100 - clamped
-        let checkValue = displayMode == .used ? usedPercent : clamped
-        
-        if displayMode == .used {
-            if checkValue < 70 { return .green }
-            if checkValue < 90 { return .yellow }
-            return .red
-        }
-        
-        if checkValue > 50 { return .green }
-        if checkValue > 20 { return .orange }
-        return .red
+    func statusColor(remainingPercent: Double, metricName: String = "") -> Color {
+        QuotaWindowPalette.statusColor(remainingPercent: remainingPercent, metricName: metricName)
     }
     
     func displayPercent(remainingPercent: Double) -> Double {
@@ -1339,7 +1327,7 @@ private struct AntigravityRingLayout: View {
     
     private var columns: [GridItem] {
         let count = min(max(groups.count, 1), 4)
-        return Array(repeating: GridItem(.flexible(), spacing: 12), count: count)
+        return Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: count)
     }
     
     private func ringPercent(for remainingPercent: Double) -> Double {
@@ -1347,14 +1335,14 @@ private struct AntigravityRingLayout: View {
     }
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 12) {
+        LazyVGrid(columns: columns, alignment: .center, spacing: 12) {
             ForEach(groups) { group in
                 VStack(spacing: 6) {
                     RingProgressView(
                         percent: ringPercent(for: group.percentage),
                         size: 44,
                         lineWidth: 5,
-                        tint: displayHelper.statusColor(remainingPercent: group.percentage),
+                        tint: displayHelper.statusColor(remainingPercent: group.percentage, metricName: group.name),
                         showLabel: true
                     )
                     
@@ -1363,6 +1351,7 @@ private struct AntigravityRingLayout: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+                .frame(maxWidth: .infinity, alignment: .top)
             }
         }
     }
@@ -1407,7 +1396,7 @@ private struct StandardLowestBarLayout: View {
                         Text(String(format: "%.0f%%", displayPercent(for: lowest.percentage)))
                             .font(.subheadline)
                             .fontWeight(.bold)
-                            .foregroundStyle(displayHelper.statusColor(remainingPercent: lowest.percentage))
+                            .foregroundStyle(displayHelper.statusColor(remainingPercent: lowest.percentage, metricName: lowest.name))
                             .monospacedDigit()
                     }
                     
@@ -1416,7 +1405,7 @@ private struct StandardLowestBarLayout: View {
                             Capsule()
                                 .fill(Color.primary.opacity(0.06))
                             Capsule()
-                                .fill(displayHelper.statusColor(remainingPercent: lowest.percentage).gradient)
+                                .fill(displayHelper.statusColor(remainingPercent: lowest.percentage, metricName: lowest.name).gradient)
                                 .frame(width: proxy.size.width * (displayPercent(for: lowest.percentage) / 100))
                         }
                     }
@@ -1429,7 +1418,7 @@ private struct StandardLowestBarLayout: View {
                     }
                 }
                 .padding(10)
-                .background(displayHelper.statusColor(remainingPercent: lowest.percentage).opacity(0.08))
+                .background(displayHelper.statusColor(remainingPercent: lowest.percentage, metricName: lowest.name).opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
             
@@ -1450,7 +1439,7 @@ private struct StandardLowestBarLayout: View {
                             Text(String(format: "%.0f%%", displayPercent(for: model.percentage)))
                                 .font(.caption)
                                 .fontWeight(.medium)
-                                .foregroundStyle(displayHelper.statusColor(remainingPercent: model.percentage))
+                                .foregroundStyle(displayHelper.statusColor(remainingPercent: model.percentage, metricName: model.name))
                                 .monospacedDigit()
                         }
                     }
@@ -1472,22 +1461,27 @@ private struct StandardRingLayout: View {
     
     private var columns: [GridItem] {
         let count = min(max(models.count, 1), 4)
-        return Array(repeating: GridItem(.flexible(), spacing: 12), count: count)
+        return Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: count)
     }
     
+    private var hasAnyResetTime: Bool {
+        models.contains { $0.formattedResetTime != "—" && !$0.formattedResetTime.isEmpty }
+    }
+
     private func ringPercent(for remainingPercent: Double) -> Double {
         displayHelper.ringPercent(remainingPercent: remainingPercent)
     }
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 12) {
+        LazyVGrid(columns: columns, alignment: .center, spacing: 12) {
             ForEach(models) { model in
+                let hasReset = model.formattedResetTime != "—" && !model.formattedResetTime.isEmpty
                 VStack(spacing: 6) {
                     RingProgressView(
                         percent: ringPercent(for: model.percentage),
                         size: 44,
                         lineWidth: 5,
-                        tint: displayHelper.statusColor(remainingPercent: model.percentage),
+                        tint: displayHelper.statusColor(remainingPercent: model.percentage, metricName: model.name),
                         showLabel: true
                     )
                     
@@ -1495,13 +1489,18 @@ private struct StandardRingLayout: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .frame(height: 16)
                     
-                    if model.formattedResetTime != "—" && !model.formattedResetTime.isEmpty {
-                        Text(model.formattedResetTime)
+                    if hasAnyResetTime {
+                        Text(hasReset ? model.formattedResetTime : " ")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .frame(height: 14)
+                            .opacity(hasReset ? 1 : 0)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .top)
             }
         }
     }

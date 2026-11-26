@@ -1877,20 +1877,13 @@ private func menuPercentText(remainingPercent: Double, displayMode: QuotaDisplay
     return "\(Int(menuDisplayPercent(remainingPercent: remainingPercent, displayMode: displayMode)))%"
 }
 
-private func menuStatusColor(remainingPercent: Double, displayMode: QuotaDisplayMode) -> Color {
-    guard remainingPercent >= 0 else { return .secondary }
-    let usedPercent = 100 - remainingPercent
-    let checkValue = displayMode == .used ? usedPercent : remainingPercent
-
-    if displayMode == .used {
-        if checkValue < 70 { return .green }
-        if checkValue < 90 { return .yellow }
-        return .red
-    } else {
-        if checkValue > 50 { return .green }
-        if checkValue > 20 { return .orange }
-        return .red
-    }
+private func menuStatusColor(
+    remainingPercent: Double,
+    displayMode: QuotaDisplayMode,
+    metricName: String = ""
+) -> Color {
+    _ = displayMode
+    return QuotaWindowPalette.statusColor(remainingPercent: remainingPercent, metricName: metricName)
 }
 
 // MARK: - Layout Subviews
@@ -1931,7 +1924,8 @@ private struct LowestBarLayout: View {
                     ModernProgressBar(
                         percentage: lowest.percentage,
                         height: 8,
-                        displayMode: displayMode
+                        displayMode: displayMode,
+                        metricName: lowest.name
                     )
 
                     if let resetTime = lowest.formattedResetTime {
@@ -1945,11 +1939,11 @@ private struct LowestBarLayout: View {
                     }
                 }
                 .padding(8)
-                .background(menuStatusColor(remainingPercent: lowest.percentage, displayMode: displayMode).opacity(0.08))
+                .background(menuStatusColor(remainingPercent: lowest.percentage, displayMode: displayMode, metricName: lowest.name).opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(menuStatusColor(remainingPercent: lowest.percentage, displayMode: displayMode).opacity(0.2), lineWidth: 1)
+                        .stroke(menuStatusColor(remainingPercent: lowest.percentage, displayMode: displayMode, metricName: lowest.name).opacity(0.2), lineWidth: 1)
                 )
             }
 
@@ -1970,7 +1964,7 @@ private struct LowestBarLayout: View {
                             }
                             Text(menuPercentText(remainingPercent: model.percentage, displayMode: displayMode))
                                 .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundStyle(menuStatusColor(remainingPercent: model.percentage, displayMode: displayMode))
+                                .foregroundStyle(menuStatusColor(remainingPercent: model.percentage, displayMode: displayMode, metricName: model.name))
                         }
                         .padding(.vertical, 2)
                     }
@@ -1989,33 +1983,47 @@ private struct RingGridLayout: View {
     }
 
     private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible()), count: columnCount)
+        Array(repeating: GridItem(.flexible(), alignment: .top), count: columnCount)
     }
 
     private var ringSize: CGFloat {
         columnCount >= 4 ? 36 : 40
     }
 
+    private var hasAnyResetTime: Bool {
+        models.contains { $0.formattedResetTime != nil }
+    }
+
     var body: some View {
-        // Auto-distribute 1-4 columns, cap at 4
-        LazyVGrid(columns: columns, spacing: 10) {
+        // Auto-distribute 1-4 columns, cap at 4, top-aligned so all rings and countdowns share baselines
+        LazyVGrid(columns: columns, alignment: .center, spacing: 10) {
             ForEach(models, id: \.name) { (model: ModelBadgeData) in
                 VStack(spacing: 4) {
-                    RingProgressView(percent: menuDisplayPercent(remainingPercent: model.percentage, displayMode: displayMode), size: ringSize, lineWidth: 4, tint: menuStatusColor(remainingPercent: model.percentage, displayMode: displayMode), showLabel: true)
+                    RingProgressView(
+                        percent: menuDisplayPercent(remainingPercent: model.percentage, displayMode: displayMode),
+                        size: ringSize,
+                        lineWidth: 4,
+                        tint: menuStatusColor(remainingPercent: model.percentage, displayMode: displayMode, metricName: model.name),
+                        showLabel: true
+                    )
 
                     Text(model.name)
                         .font(.system(size: 10, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
+                        .frame(height: 14)
 
-                    if let resetTime = model.formattedResetTime {
-                        Text(resetTime)
+                    if hasAnyResetTime {
+                        Text(model.formattedResetTime ?? " ")
                             .font(.system(size: 8, design: .rounded))
                             .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .frame(height: 11)
+                            .opacity(model.formattedResetTime == nil ? 0 : 1)
                     }
                 }
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, alignment: .top)
             }
         }
     }
@@ -2056,7 +2064,7 @@ private struct CardGridLayout: View {
                         } else {
                             Text(menuPercentText(remainingPercent: model.percentage, displayMode: displayMode))
                                 .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundStyle(menuStatusColor(remainingPercent: model.percentage, displayMode: displayMode))
+                                .foregroundStyle(menuStatusColor(remainingPercent: model.percentage, displayMode: displayMode, metricName: model.name))
                         }
                     }
 
@@ -2064,7 +2072,8 @@ private struct CardGridLayout: View {
                         ModernProgressBar(
                             percentage: model.percentage,
                             height: 4,
-                            displayMode: displayMode
+                            displayMode: displayMode,
+                            metricName: model.name
                         )
                     }
                 }
@@ -2083,13 +2092,14 @@ private struct ModernProgressBar: View {
     let percentage: Double
     let height: CGFloat
     let displayMode: QuotaDisplayMode
+    var metricName: String = ""
     
     private var displayPercent: Double {
         menuDisplayPercent(remainingPercent: percentage, displayMode: displayMode)
     }
     
     var color: Color {
-        menuStatusColor(remainingPercent: percentage, displayMode: displayMode)
+        menuStatusColor(remainingPercent: percentage, displayMode: displayMode, metricName: metricName)
     }
     
     var body: some View {
@@ -2154,7 +2164,7 @@ private struct MenuModelDetailView: View {
     let settings: StatusBarMenuDisplaySettings
 
     private var statusColor: Color {
-        menuStatusColor(remainingPercent: model.percentage, displayMode: settings.quotaDisplayMode)
+        menuStatusColor(remainingPercent: model.percentage, displayMode: settings.quotaDisplayMode, metricName: model.name)
     }
 
     var body: some View {

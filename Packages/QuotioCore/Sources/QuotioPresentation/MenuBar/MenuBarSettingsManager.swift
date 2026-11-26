@@ -5,6 +5,7 @@
 //  Menu bar quota display settings with persistence
 //
 
+import AppKit
 import Foundation
 import QuotioApplication
 import QuotioDomain
@@ -326,6 +327,55 @@ public struct MenuBarQuotaPair: Equatable, Sendable {
     }
 }
 
+/// Unified Scheme 2 quota palette: emerald green for hourly/session windows,
+/// violet for weekly windows, and bright red alert at <= 20% remaining.
+public enum QuotaWindowPalette {
+    public static let lowAlertThreshold: Double = 20
+
+    public static var sessionColor: Color {
+        adaptiveColor(
+            light: NSColor(srgbRed: 0.157, green: 0.722, blue: 0.302, alpha: 1), // #28B84D
+            dark: NSColor(srgbRed: 0.204, green: 0.827, blue: 0.345, alpha: 1)   // #34D358
+        )
+    }
+
+    public static var weeklyColor: Color {
+        adaptiveColor(
+            light: NSColor(srgbRed: 0.608, green: 0.259, blue: 0.847, alpha: 1), // #9B42D8
+            dark: NSColor(srgbRed: 0.753, green: 0.518, blue: 0.988, alpha: 1)   // #C084FC
+        )
+    }
+
+    public static var lowAlertColor: Color {
+        .red
+    }
+
+    public static func isWeeklyMetric(_ name: String) -> Bool {
+        let lower = name.lowercased()
+        return lower.contains("weekly")
+            || lower.contains("week")
+            || lower.contains("7d")
+            || lower.contains("seven")
+            || lower.contains("周")
+    }
+
+    public static func statusColor(remainingPercent: Double, isWeekly: Bool) -> Color {
+        guard remainingPercent >= 0 else { return .secondary }
+        if remainingPercent <= lowAlertThreshold { return lowAlertColor }
+        return isWeekly ? weeklyColor : sessionColor
+    }
+
+    public static func statusColor(remainingPercent: Double, metricName: String) -> Color {
+        statusColor(remainingPercent: remainingPercent, isWeekly: isWeeklyMetric(metricName))
+    }
+
+    private static func adaptiveColor(light: NSColor, dark: NSColor) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+        })
+    }
+}
+
 /// Data for displaying a single quota item in menu bar
 public struct MenuBarQuotaDisplayItem: Identifiable, Equatable {
     public let id: String
@@ -358,11 +408,9 @@ public struct MenuBarQuotaDisplayItem: Identifiable, Equatable {
         statusColor(for: percentage)
     }
 
-    public func statusColor(for percentage: Double) -> Color {
+    public func statusColor(for percentage: Double, isWeekly: Bool = false) -> Color {
         if isForbidden { return .orange }
-        if percentage > 50 { return .green }
-        if percentage > 20 { return .orange }
-        return .red
+        return QuotaWindowPalette.statusColor(remainingPercent: percentage, isWeekly: isWeekly)
     }
 }
 

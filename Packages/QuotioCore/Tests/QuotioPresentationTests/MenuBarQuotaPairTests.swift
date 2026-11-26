@@ -174,4 +174,22 @@ final class MenuBarQuotaPairTests: XCTestCase {
         XCTAssertLessThanOrEqual(hostingView.fittingSize.height, 22)
         XCTAssertLessThan(hostingView.fittingSize.width, 40)
     }
+
+    func testQuotaWindowPaletteDistinguishesSessionWeeklyAndLowAlert() {
+        XCTAssertFalse(QuotaWindowPalette.isWeeklyMetric("Gemini Session"))
+        XCTAssertFalse(QuotaWindowPalette.isWeeklyMetric("antigravity-gemini-session"))
+        XCTAssertFalse(QuotaWindowPalette.isWeeklyMetric("codex-session"))
+        XCTAssertTrue(QuotaWindowPalette.isWeeklyMetric("Gemini Weekly"))
+        XCTAssertTrue(QuotaWindowPalette.isWeeklyMetric("antigravity-gemini-weekly"))
+        XCTAssertTrue(QuotaWindowPalette.isWeeklyMetric("codex-weekly"))
+        XCTAssertTrue(QuotaWindowPalette.isWeeklyMetric("seven-day-weekly"))
+
+        XCTAssertEqual(QuotaWindowPalette.statusColor(remainingPercent: -1, isWeekly: false), .secondary)
+        XCTAssertEqual(QuotaWindowPalette.statusColor(remainingPercent: 20, isWeekly: false), .red)
+        XCTAssertEqual(QuotaWindowPalette.statusColor(remainingPercent: 15, isWeekly: true), .red)
+        XCTAssertNotEqual(
+            QuotaWindowPalette.statusColor(remainingPercent: 85, isWeekly: false),
+            QuotaWindowPalette.statusColor(remainingPercent: 86, isWeekly: true)
+        )
+    }
 }
