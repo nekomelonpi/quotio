@@ -129,7 +129,10 @@ public actor AntigravityQuotaFetcher: QuotaFetching {
     "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
   private static let clientSecret = "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"
   private static let userAgent = "antigravity/1.11.3 Darwin/arm64"
+  private static let subscriptionUserAgent = "agy"
   private static let summaryUserAgent = "antigravity/hub/2.23.0 darwin/arm64"
+  private static let productionHost = "cloudcode-pa.googleapis.com"
+  private static let dailyHost = "daily-cloudcode-pa.googleapis.com"
 
   public init(
     localCredentials: any AntigravityCredentialReading = LocalAntigravityCredentialStore(),
@@ -270,23 +273,48 @@ public actor AntigravityQuotaFetcher: QuotaFetching {
   private func fetchData(token: String) async -> (
     quota: ProviderQuota?, subscription: QuotaSubscriptionInfo?, authorizationFailed: Bool
   ) {
-    let subscription = await fetchSubscription(token: token)
-    let project = subscription?.cloudaicompanionProject
-    if let models = await fetchSummary(token: token, project: project) {
-      return (ProviderQuota(models: models, lastUpdated: now()), subscription, false)
+    let endpointPairs = cloudEndpointPairs()
+    var lastSubscription: QuotaSubscriptionInfo?
+    for pair in endpointPairs {
+      let subscription = await fetchSubscription(url: pair.subscriptionURL, token: token)
+      if lastSubscription == nil { lastSubscription = subscription }
+      let project = subscription?.cloudaicompanionProject
+      if let models = await fetchSummary(url: pair.summaryURL, token: token, project: project) {
+        return (ProviderQuota(models: models, lastUpdated: now()), subscription ?? lastSubscription, false)
+      }
     }
+    let project = lastSubscription?.cloudaicompanionProject
     do {
-      return (try await fetchModels(token: token, project: project), subscription, false)
+      return (try await fetchModels(token: token, project: project), lastSubscription, false)
     } catch InfrastructureQuotaFetchError.httpError(let status) where status == 401 || status == 403
     {
-      return (nil, subscription, true)
+      return (nil, lastSubscription, true)
     } catch {
-      return (nil, subscription, false)
+      return (nil, lastSubscription, false)
     }
   }
 
-  private func fetchSubscription(token: String) async -> QuotaSubscriptionInfo? {
-    var request = cloudRequest(url: subscriptionURL, token: token)
+  private func cloudEndpointPairs() -> [(subscriptionURL: URL, summaryURL: URL)] {
+    var pairs: [(subscriptionURL: URL, summaryURL: URL)] = []
+    if let dailySubscription = Self.dailyEndpoint(from: subscriptionURL),
+      let dailySummary = Self.dailyEndpoint(from: summaryURL)
+    {
+      pairs.append((dailySubscription, dailySummary))
+    }
+    pairs.append((subscriptionURL, summaryURL))
+    return pairs
+  }
+
+  private static func dailyEndpoint(from url: URL) -> URL? {
+    guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+      components.host == productionHost
+    else { return nil }
+    components.host = dailyHost
+    return components.url
+  }
+
+  private func fetchSubscription(url: URL, token: String) async -> QuotaSubscriptionInfo? {
+    var request = cloudRequest(url: url, token: token, userAgent: Self.subscriptionUserAgent)
     request.httpBody = try? JSONSerialization.data(withJSONObject: [
       "metadata": ["ideType": "ANTIGRAVITY"]
     ])
@@ -296,10 +324,10 @@ public actor AntigravityQuotaFetcher: QuotaFetching {
     return try? JSONDecoder().decode(QuotaSubscriptionInfo.self, from: data)
   }
 
-  private func fetchSummary(token: String, project: String?) async -> [QuotaMetric]? {
+  private func fetchSummary(url: URL, token: String, project: String?) async -> [QuotaMetric]? {
     let payloads: [[String: Any]] = project.map { [["project": $0], [:]] } ?? [[:]]
     for payload in payloads {
-      var request = cloudRequest(url: summaryURL, token: token, userAgent: Self.summaryUserAgent)
+      var request = cloudRequest(url: url, token: token, userAgent: Self.summaryUserAgent)
       request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
       guard let (data, response) = try? await session.data(for: request),
         let http = response as? HTTPURLResponse, 200...299 ~= http.statusCode,

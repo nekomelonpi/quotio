@@ -74,12 +74,19 @@ final class AntigravityQuotaFetcherTests: XCTestCase {
       requests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == "Bearer second" })
     XCTAssertTrue(
       requests.allSatisfy { request in
-        let expectedUA =
-          request.url?.lastPathComponent == "v1internal:retrieveUserQuotaSummary"
-          ? "antigravity/hub/2.23.0 darwin/arm64"
-          : "antigravity/1.11.3 Darwin/arm64"
+        let expectedUA: String
+        switch request.url?.lastPathComponent {
+        case "v1internal:retrieveUserQuotaSummary":
+          expectedUA = "antigravity/hub/2.23.0 darwin/arm64"
+        case "v1internal:loadCodeAssist":
+          expectedUA = "agy"
+        default:
+          expectedUA = "antigravity/1.11.3 Darwin/arm64"
+        }
         return request.value(forHTTPHeaderField: "User-Agent") == expectedUA
       })
+    XCTAssertTrue(
+      requests.allSatisfy { $0.url?.host == "daily-cloudcode-pa.googleapis.com" })
     let subscriptionBody = try XCTUnwrap(
       requests.first { $0.url?.lastPathComponent == "v1internal:loadCodeAssist" }?.httpBody)
     let object = try XCTUnwrap(
