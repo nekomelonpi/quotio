@@ -858,7 +858,14 @@ private final class ProductionAppRuntimeServices: AppRuntimeServices {
                ) {
                 isForbidden = quotaData.isForbidden
                 if !quotaData.models.isEmpty {
-                    let models = quotaData.models.map { (name: $0.name, percentage: $0.percentage) }
+                    let displayModels: [QuotaMetric]
+                    if provider == .antigravity {
+                        let geminiModels = quotaData.models.filter { $0.name.hasPrefix("antigravity-gemini-") }
+                        displayModels = geminiModels.isEmpty ? quotaData.models : geminiModels
+                    } else {
+                        displayModels = quotaData.models
+                    }
+                    let models = displayModels.map { (name: $0.name, percentage: $0.percentage) }
                     displayPercent = menuBarSettings.totalUsagePercent(models: models)
                     if menuBarSettings.stackPairedQuotaMetrics {
                         quotaPair = MenuBarQuotaPair.resolve(for: provider, from: quotaData.models)

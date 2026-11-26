@@ -1,0 +1,46 @@
+name: Build Custom macOS Quotio
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+      - custom-*
+
+permissions: {}
+
+jobs:
+  build-macos:
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: '26.1'
+
+      - name: Run QuotioCore unit tests
+        run: swift test --package-path Packages/QuotioCore --filter "AntigravityQuotaFetcherTests|MenuBarQuotaPairTests"
+
+      - name: Build ad-hoc Release DMG and ZIP
+        working-directory: apps/macos
+        run: ./scripts/build_dmg.sh
+
+      - name: Upload macOS build artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Quotio-v0.33.1-gemini-macos
+          path: |
+            apps/macos/build/release/Quotio-*.zip
+            apps/macos/build/release/Quotio-*.dmg
+          if-no-files-found: error
+          retention-days: 30

@@ -254,9 +254,9 @@ public struct MenuBarQuotaPair: Equatable, Sendable {
         case .antigravity:
             return makePair(
                 from: models,
-                topNames: ["antigravity-gemini-session", "antigravity-claude-gpt-session"],
+                topNames: ["antigravity-gemini-session"],
                 topLabelKey: "quota.metric.session",
-                bottomNames: ["antigravity-gemini-weekly", "antigravity-claude-gpt-weekly"],
+                bottomNames: ["antigravity-gemini-weekly"],
                 bottomLabelKey: "quota.metric.weekly"
             )
         case .devin:

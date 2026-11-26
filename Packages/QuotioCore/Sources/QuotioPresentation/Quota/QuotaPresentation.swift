@@ -166,6 +166,7 @@ public extension QuotaMetric {
         case "claude-4-opus": "Claude 4 Opus"
         case "antigravity-gemini-session": "Gemini Session"
         case "antigravity-gemini-weekly": "Gemini Weekly"
+        case "antigravity-argon-weekly": "Argon Weekly"
         case "antigravity-claude-gpt-session": "Claude/GPT Session"
         case "antigravity-claude-gpt-weekly": "Claude/GPT Weekly"
         case "codex-session": "Session"

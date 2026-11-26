@@ -129,6 +129,7 @@ public actor AntigravityQuotaFetcher: QuotaFetching {
     "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
   private static let clientSecret = "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"
   private static let userAgent = "antigravity/1.11.3 Darwin/arm64"
+  private static let summaryUserAgent = "antigravity/hub/2.23.0 darwin/arm64"
 
   public init(
     localCredentials: any AntigravityCredentialReading = LocalAntigravityCredentialStore(),
@@ -298,7 +299,7 @@ public actor AntigravityQuotaFetcher: QuotaFetching {
   private func fetchSummary(token: String, project: String?) async -> [QuotaMetric]? {
     let payloads: [[String: Any]] = project.map { [["project": $0], [:]] } ?? [[:]]
     for payload in payloads {
-      var request = cloudRequest(url: summaryURL, token: token)
+      var request = cloudRequest(url: summaryURL, token: token, userAgent: Self.summaryUserAgent)
       request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
       guard let (data, response) = try? await session.data(for: request),
         let http = response as? HTTPURLResponse, 200...299 ~= http.statusCode,
@@ -393,11 +394,13 @@ public actor AntigravityQuotaFetcher: QuotaFetching {
     return updated
   }
 
-  private func cloudRequest(url: URL, token: String) -> URLRequest {
+  private func cloudRequest(
+    url: URL, token: String, userAgent: String = AntigravityQuotaFetcher.userAgent
+  ) -> URLRequest {
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-    request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+    request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     return request
   }
@@ -424,19 +427,22 @@ public actor AntigravityQuotaFetcher: QuotaFetching {
         guard bool(bucket["disabled"]) != true, let period = period(label),
           let fraction = fraction(bucket)
         else { continue }
+        let effectiveGroupID = label.lowercased().contains("argon") ? "argon" : groupID
         let reset =
           string(
             bucket["resetTime"] ?? bucket["reset_time"] ?? bucket["resetAt"] ?? bucket["reset_at"])
           ?? ""
         metrics.append(
           .init(
-            name: "antigravity-\(groupID)-\(period)", percentage: min(100, max(0, fraction * 100)),
+            name: "antigravity-\(effectiveGroupID)-\(period)",
+            percentage: min(100, max(0, fraction * 100)),
             resetTime: reset))
       }
     }
     let order = [
-      "antigravity-gemini-session", "antigravity-gemini-weekly", "antigravity-claude-gpt-session",
-      "antigravity-claude-gpt-weekly",
+      "antigravity-gemini-session", "antigravity-gemini-weekly",
+      "antigravity-argon-weekly",
+      "antigravity-claude-gpt-session", "antigravity-claude-gpt-weekly",
     ]
     var seen = Set<String>()
     return metrics.filter { seen.insert($0.name).inserted }.sorted {
@@ -469,8 +475,14 @@ public actor AntigravityQuotaFetcher: QuotaFetching {
   }
   private nonisolated static func groupID(_ value: String) -> String? {
     let value = value.lowercased()
-    return value.contains("gemini")
-      ? "gemini" : (value.contains("claude") || value.contains("gpt")) ? "claude-gpt" : nil
+    if value.contains("argon") { return "argon" }
+    if value.contains("gemini") { return "gemini" }
+    if value.contains("claude") || value.contains("gpt") || value.contains("third-party")
+      || value.contains("3p")
+    {
+      return "claude-gpt"
+    }
+    return nil
   }
   private nonisolated static func period(_ value: String) -> String? {
     let value = value.lowercased()

@@ -53,17 +53,18 @@ final class MenuBarQuotaPairTests: XCTestCase {
         XCTAssertNil(MenuBarQuotaPair.resolve(for: .amp, from: models))
     }
 
-    func testAntigravityUsesLowestProviderLimitForEachWindow() throws {
+    func testAntigravityMenuBarPairUsesGeminiOnly() throws {
         let models = [
             QuotaMetric(name: "antigravity-gemini-session", percentage: 72, resetTime: ""),
             QuotaMetric(name: "antigravity-gemini-weekly", percentage: 55, resetTime: ""),
+            QuotaMetric(name: "antigravity-argon-weekly", percentage: 10, resetTime: ""),
             QuotaMetric(name: "antigravity-claude-gpt-session", percentage: 31, resetTime: ""),
-            QuotaMetric(name: "antigravity-claude-gpt-weekly", percentage: 67, resetTime: ""),
+            QuotaMetric(name: "antigravity-claude-gpt-weekly", percentage: 20, resetTime: ""),
         ]
 
         let pair = try XCTUnwrap(MenuBarQuotaPair.resolve(for: .antigravity, from: models))
 
-        XCTAssertEqual(pair.top.remainingPercentage, 31)
+        XCTAssertEqual(pair.top.remainingPercentage, 72)
         XCTAssertEqual(pair.bottom.remainingPercentage, 55)
     }
 

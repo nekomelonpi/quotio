@@ -73,14 +73,38 @@ final class AntigravityQuotaFetcherTests: XCTestCase {
     XCTAssertTrue(
       requests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == "Bearer second" })
     XCTAssertTrue(
-      requests.allSatisfy {
-        $0.value(forHTTPHeaderField: "User-Agent") == "antigravity/1.11.3 Darwin/arm64"
+      requests.allSatisfy { request in
+        let expectedUA =
+          request.url?.lastPathComponent == "v1internal:retrieveUserQuotaSummary"
+          ? "antigravity/hub/2.23.0 darwin/arm64"
+          : "antigravity/1.11.3 Darwin/arm64"
+        return request.value(forHTTPHeaderField: "User-Agent") == expectedUA
       })
     let subscriptionBody = try XCTUnwrap(
       requests.first { $0.url?.lastPathComponent == "v1internal:loadCodeAssist" }?.httpBody)
     let object = try XCTUnwrap(
       JSONSerialization.jsonObject(with: subscriptionBody) as? [String: Any])
     XCTAssertEqual((object["metadata"] as? [String: String])?["ideType"], "ANTIGRAVITY")
+  }
+
+  func testParseSummarySeparatesGeminiArgonAndThirdPartyBuckets() throws {
+    let payload = Data(
+      #"{"groups":[{"displayName":"Gemini","buckets":[{"bucketId":"gemini-5h","remainingFraction":0.64,"resetTime":"2026-11-25T10:46:34Z"},{"bucketId":"gemini-weekly","remainingFraction":0.91,"resetTime":"2026-12-02T05:46:34Z"}]},{"displayName":"Gemini 4 Argon","buckets":[{"bucketId":"gemini-argon-wtu-weekly","remainingFraction":0.15}]},{"displayName":"Third-party","buckets":[{"bucketId":"3p-5h","remainingFraction":1.0},{"bucketId":"3p-weekly","remainingFraction":1.0}]}]}"#
+        .utf8
+    )
+
+    let metrics = try XCTUnwrap(AntigravityQuotaFetcher.parseSummary(payload))
+    XCTAssertEqual(
+      metrics.map(\.name),
+      [
+        "antigravity-gemini-session",
+        "antigravity-gemini-weekly",
+        "antigravity-argon-weekly",
+        "antigravity-claude-gpt-session",
+        "antigravity-claude-gpt-weekly",
+      ]
+    )
+    XCTAssertEqual(metrics.map(\.percentage), [64, 91, 15, 100, 100])
   }
 
   func testFallbackMapsForbiddenWithoutRetrying() async throws {
